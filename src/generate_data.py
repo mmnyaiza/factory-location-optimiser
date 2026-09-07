@@ -14,6 +14,11 @@ N_CUSTOMERS = 500
 N_FACILITIES = 20
 N_SUPPLIERS = 10
 
+# Buffers that guarantee capacity > demand and supply > capacity,
+# regardless of what the random draws produce.
+FACILITY_BUFFER = 1.25   # total facility capacity = demand * 1.25
+SUPPLIER_BUFFER = 1.15   # total supplier capacity = facility capacity * 1.15
+
 # Output directory
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -224,6 +229,24 @@ for i in range(1, N_FACILITIES + 1):
 facilities = pd.DataFrame(facilities)
 
 
+# ------------------------------------------------------------
+# SCALE FACILITY CAPACITY SO IT EXCEEDS TOTAL DEMAND
+# ------------------------------------------------------------
+# Random draws don't guarantee capacity > demand on their own,
+# so we scale the whole capacity column up (preserving relative
+# spread between facilities) until the total clears demand by
+# FACILITY_BUFFER.
+total_demand = customers["annual_demand"].sum()
+target_facility_capacity = total_demand * FACILITY_BUFFER
+total_facility_capacity = facilities["capacity"].sum()
+
+if total_facility_capacity < target_facility_capacity:
+    scale_factor = target_facility_capacity / total_facility_capacity
+    facilities["capacity"] = (
+        facilities["capacity"] * scale_factor
+    ).round().astype(int)
+
+
 # ============================================================
 # GENERATE SUPPLIERS
 # ============================================================
@@ -276,6 +299,22 @@ for i in range(1, N_SUPPLIERS + 1):
 
 
 suppliers = pd.DataFrame(suppliers)
+
+
+# ------------------------------------------------------------
+# SCALE SUPPLIER CAPACITY SO IT EXCEEDS TOTAL FACILITY CAPACITY
+# ------------------------------------------------------------
+# Suppliers feed facilities, not customers directly, so target
+# the (already-scaled) facility total rather than raw demand.
+total_facility_capacity = facilities["capacity"].sum()
+target_supplier_capacity = total_facility_capacity * SUPPLIER_BUFFER
+total_supplier_capacity = suppliers["supply_capacity"].sum()
+
+if total_supplier_capacity < target_supplier_capacity:
+    scale_factor = target_supplier_capacity / total_supplier_capacity
+    suppliers["supply_capacity"] = (
+        suppliers["supply_capacity"] * scale_factor
+    ).round().astype(int)
 
 
 # ============================================================
